@@ -23,6 +23,8 @@ manifest:
       url-base: https://github.com/zephyrproject-rtos
     - name: babblesim
       url-base: https://github.com/BabbleSim
+    - name: uday
+      url-base: https://github.com/udaynordic
 
   group-filter: [-babblesim, -optional]
 
@@ -188,7 +190,8 @@ manifest:
       groups:
         - hal
     - name: hal_nordic
-      revision: 5c8d109371ebb740fbef1f440a3b59e488a36717
+      remote: uday
+      revision: connected_scan
       path: modules/hal/nordic
       groups:
         - hal
