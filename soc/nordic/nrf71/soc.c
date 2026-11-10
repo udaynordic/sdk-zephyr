@@ -224,6 +224,53 @@ static void wifi_setup(void)
 	NRF_WIFICORE_LMAC_VPR->INITPC = (uint32_t)(uintptr_t)NRF_WICR->FIRMWARE.LMACINITPC;
 	NRF_WIFICORE_LMAC_VPR->CPURUN = (VPR_CPURUN_EN_Running << VPR_CPURUN_EN_Pos);
 }
+
+#if !defined(CONFIG_TRUSTED_EXECUTION_NONSECURE) || !defined(__ZEPHYR__)
+#define HVBUCK_VOUTUPSCALE_ADDR     (0x5012D418UL) /* HVBUCK + 0x418, secure */
+#define HVBUCK_TRIM_VOUTHYST_ADDR   (0x5012D810UL) /* HVBUCK + 0x810, secure */
+#define HVBUCK_TRIM_VOUTOFFSET_ADDR (0x5012D818UL) /* HVBUCK + 0x818, secure */
+#define LDOBUCK0V8_BASE             (0x50128000UL) /* LDOBUCK0V8_S / VREGAO0V8, secure */
+#define LDOHLP0V8_BASE              (0x50127000UL) /* LDOHLP0V8_S / VREG1V0, secure */
+#else
+#define HVBUCK_VOUTUPSCALE_ADDR     (0x4012D418UL) /* HVBUCK + 0x418, non-secure */
+#define HVBUCK_TRIM_VOUTHYST_ADDR   (0x4012D810UL) /* HVBUCK + 0x810, non-secure */
+#define HVBUCK_TRIM_VOUTOFFSET_ADDR (0x4012D818UL) /* HVBUCK + 0x818, non-secure */
+#define LDOBUCK0V8_BASE             (0x40128000UL) /* LDOBUCK0V8, non-secure */
+#define LDOHLP0V8_BASE              (0x40127000UL) /* LDOHLP0V8, non-secure */
+#endif
+
+#define LDO_TRIM_IREF_OFF           (0x440UL)
+#define LDO_TRIM_HIGHPOWER_OFF      (0x444UL)
+#define LDO_TRIM_LOWPOWER_OFF       (0x448UL)
+#define LDO_TRIM_ULTRALOWPOWER_OFF  (0x44CUL)
+#define LDO_TRIM_BPDET_OFF          (0x450UL)
+
+static void hvbuck_1v0_setup(void)
+{
+	/* HVBUCK 1.0 V: VOUTUPSCALE.VAL 0x12 → 0x10; TRIM VOUTHYST.VAL = 2, VOUTOFFSET.VAL = 0x14. */
+	*(volatile uint32_t *)HVBUCK_VOUTUPSCALE_ADDR = 0x10;
+	*(volatile uint32_t *)HVBUCK_TRIM_VOUTHYST_ADDR = 0x2;
+	*(volatile uint32_t *)HVBUCK_TRIM_VOUTOFFSET_ADDR = 0x14;
+}
+
+static void ldo_regulator_trim_setup(void)
+{
+	uintptr_t buck0v8 = LDOBUCK0V8_BASE;
+	uintptr_t hlp0v8 = LDOHLP0V8_BASE;
+
+	/* LDOBUCK0V8_S (VREGAO0V8): TRIM block */
+	*(volatile uint32_t *)(buck0v8 + LDO_TRIM_IREF_OFF) = 0x1B;
+	*(volatile uint32_t *)(buck0v8 + LDO_TRIM_HIGHPOWER_OFF) = 0x0;
+	*(volatile uint32_t *)(buck0v8 + LDO_TRIM_LOWPOWER_OFF) = 0x0;
+	*(volatile uint32_t *)(buck0v8 + LDO_TRIM_ULTRALOWPOWER_OFF) = 0x0;
+	*(volatile uint32_t *)(buck0v8 + LDO_TRIM_BPDET_OFF) = 0xF;
+
+	/* LDOHLP0V8_S (VREG1V0): TRIM block (ULPR at +0x44C) */
+	*(volatile uint32_t *)(hlp0v8 + LDO_TRIM_IREF_OFF) = 0x19;
+	*(volatile uint32_t *)(hlp0v8 + LDO_TRIM_HIGHPOWER_OFF) = 0x0;
+	*(volatile uint32_t *)(hlp0v8 + LDO_TRIM_LOWPOWER_OFF) = 0xE;
+	*(volatile uint32_t *)(hlp0v8 + LDO_TRIM_ULTRALOWPOWER_OFF) = 0x7;
+}
 #endif
 #endif
 
@@ -277,6 +324,8 @@ int nordicsemi_nrf71_init(void)
 
 #if defined(CONFIG_SOC_NRF71_WIFI_BOOT)
 	wifi_setup();
+	hvbuck_1v0_setup();
+	ldo_regulator_trim_setup();
 #endif
 
 #if !DT_NODE_HAS_STATUS_OKAY(DT_NODELABEL(gpio4))
